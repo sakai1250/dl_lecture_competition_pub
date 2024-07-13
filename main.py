@@ -10,8 +10,14 @@ from termcolor import cprint
 from tqdm import tqdm
 
 from src.datasets import ThingsMEGDataset
-from src.models import BasicConvClassifier, Classifier
+from src.models import BasicConvClassifier, Classifier, BrainDecoder
 from src.utils import set_seed
+
+
+def l2_regularization(model, l2_lambda):
+    l2_norm = sum(p.pow(2).sum() for p in model.parameters())
+    return l2_lambda * l2_norm
+
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
 def run(args: DictConfig):
@@ -26,11 +32,11 @@ def run(args: DictConfig):
     # ------------------
     loader_args = {"batch_size": args.batch_size, "num_workers": args.num_workers}
     
-    train_set = ThingsMEGDataset("train", args.data_dir)
+    train_set = ThingsMEGDataset("train", args.data_dir, preprocess=True, augment=True)
     train_loader = torch.utils.data.DataLoader(train_set, shuffle=True, **loader_args)
-    val_set = ThingsMEGDataset("val", args.data_dir)
+    val_set = ThingsMEGDataset("val", args.data_dir, preprocess=True, augment=False)
     val_loader = torch.utils.data.DataLoader(val_set, shuffle=False, **loader_args)
-    test_set = ThingsMEGDataset("test", args.data_dir)
+    test_set = ThingsMEGDataset("test", args.data_dir, preprocess=True, augment=False)
     test_loader = torch.utils.data.DataLoader(
         test_set, shuffle=False, batch_size=args.batch_size, num_workers=args.num_workers
     )
@@ -40,7 +46,8 @@ def run(args: DictConfig):
     # ------------------
     len_ids = train_set.get_len_ids()
     print(train_set.num_classes, train_set.seq_len, train_set.num_channels) #1854, 281, 271
-    model = Classifier(num_classes=train_set.num_classes, seq_len=train_set.seq_len, len_ids=len_ids, in_channels=271).to(args.device)
+    # model = Classifier(num_classes=train_set.num_classes, seq_len=train_set.seq_len, len_ids=len_ids, in_channels=271).to(args.device)
+    model = BrainDecoder(num_subjects=4, num_channels=271, num_output_features=1854).to(args.device)
     # model = BasicConvClassifier(
     #     train_set.num_classes, train_set.seq_len, train_set.num_channels
     # ).to(args.device)
@@ -71,6 +78,7 @@ def run(args: DictConfig):
             y_pred = model(X, subject_idxs)
             
             loss = F.cross_entropy(y_pred, y)
+            # loss += l2_regularization(model, 0.000001)
             train_loss.append(loss.item())
             
             optimizer.zero_grad()

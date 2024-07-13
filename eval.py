@@ -10,7 +10,7 @@ from termcolor import cprint
 from tqdm import tqdm
 
 from src.datasets import ThingsMEGDataset
-from src.models import BasicConvClassifier, Classifier
+from src.models import BasicConvClassifier, Classifier, BrainDecoder
 from src.utils import set_seed
 
 
@@ -33,7 +33,8 @@ def run(args: DictConfig):
     #       Model
     # ------------------
     len_ids = train_set.get_len_ids()
-    model = Classifier(num_classes=test_set.num_classes, seq_len=test_set.seq_len, len_ids=len_ids, in_channels=271).to(args.device)
+    # model = Classifier(num_classes=test_set.num_classes, seq_len=test_set.seq_len, len_ids=len_ids, in_channels=271).to(args.device)
+    model = BrainDecoder(num_subjects=4, num_channels=271, num_output_features=1854).to(args.device)
     model.load_state_dict(torch.load('model_best_main.pt', map_location=args.device))
 
     # ------------------

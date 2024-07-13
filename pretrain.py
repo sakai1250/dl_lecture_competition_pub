@@ -12,8 +12,14 @@ import wandb
 from termcolor import cprint
 from tqdm import tqdm
 
-from src.models import BasicConvClassifier
+from src.models import BasicConvClassifier, BrainDecoder
 from src.utils import set_seed, LabelSmoothingCrossEntropy
+
+def l2_regularization(model, l2_lambda):
+    l2_norm = sum(p.pow(2).sum() for p in model.parameters())
+    return l2_lambda * l2_norm
+
+
 
 @hydra.main(version_base=None, config_path="configs", config_name="config_pretrain")
 def run(args: DictConfig):
@@ -29,9 +35,9 @@ def run(args: DictConfig):
     transform = transforms.Compose([
         transforms.Resize((271, 281)),
         transforms.RandomHorizontalFlip(),
-        # transforms.RandomErasing(),
         transforms.RandomRotation(5),
         transforms.ToTensor(),
+        transforms.RandomErasing(p=0.5, scale=(0.02, 0.2), ratio=(0.3, 3.3), value=0, inplace=False),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         transforms.Grayscale(num_output_channels=1),
         transforms.Lambda(lambda x: torch.reshape(x, (271, 281)))
@@ -52,7 +58,9 @@ def run(args: DictConfig):
     # ------------------
     #       Model
     # ------------------
-    model = BasicConvClassifier(num_classes=len(trainval_dataset.classes), seq_len=trainval_dataset[0][0].shape[1], in_channels=trainval_dataset[0][0].shape[0]).to(args.device)
+    model = BrainDecoder(num_subjects=4, num_channels=271, num_output_features=1854).to(args.device)
+    # model = EEGNet(1854, 271).to(args.device)
+    # model = BasicConvClassifier(num_classes=len(trainval_dataset.classes), seq_len=trainval_dataset[0][0].shape[1], in_channels=trainval_dataset[0][0].shape[0]).to(args.device)
     # ------------------
     #     Optimizer
     # ------------------
@@ -78,6 +86,7 @@ def run(args: DictConfig):
             y_pred = model(X)
 
             loss = cross_entropy(y_pred, y)
+            loss += l2_regularization(model, 0.000001)
             # loss = F.cross_entropy(y_pred, y) + 0.005 * l1_reg
             # loss = F.cross_entropy(y_pred, y)
             train_loss.append(loss.item())
